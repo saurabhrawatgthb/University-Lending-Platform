@@ -1,77 +1,74 @@
-# University Peer-to-Peer Lending Platform 🎓🔄
+# University Peer-to-Peer Lending Platform
 
-A decentralized, real-time matchmaking platform designed for university environments where students can borrow and lend items among themselves seamlessly.
+A real-time campus lending platform where students can request and lend items quickly using request-offer matching.
 
-> **Why?** Frictionless sharing! Need a Mac Charger for an exam? Post an urgent request and let the platform's Smart Matching engine instantly notify nearby students who can lend it to you.
+## Project Snapshot
 
----
+- Purpose: Reduce friction in short-term student borrowing and lending.
+- Core flow: Request -> Offer -> Accept -> Complete transaction.
+- Delivery model: Monorepo with separate backend and frontend modules.
 
-## 🏗️ Architecture Stack
+## Tech Stack
 
-This project is built using a modern, scalable, modular architecture:
+- Backend: Java 21, Spring Boot 3.4.0
+- Database: PostgreSQL (H2 in-memory for local development)
+- Frontend: React + TypeScript + Vite
+- Styling: Tailwind CSS
+- Realtime: STOMP over WebSockets
 
-*   **Backend Engine:** Java 21 & Spring Boot 3.4.0
-*   **Database:** PostgreSQL (with H2 in-memory configured for local dev)
-*   **Frontend UI:** React (TypeScript) + Vite
-*   **Styling:** Tailwind CSS with minimal, glassmorphic UI elements
-*   **Real-time Layer:** STOMP over WebSockets for instant matchmaking notifications
+## Core MVP Features
 
----
+1. Request posting with urgency and location context.
+2. Offer submission against open requests.
+3. Instant notification updates for request/offer events.
+4. Atomic acceptance flow that declines competing offers.
 
-## 🔥 Core Features (MVP)
+## Local Development
 
-1.  **Demand Generation (Requests):** Students can post exactly what they need, tagged with an urgency level and location.
-2.  **Supply Bidding (Offers):** Lenders nearby browse the live feed and can submit an offer to fulfill the request.
-3.  **Real-Time Notifications:** As soon as an offer is made or a request is created nearby, the frontend instantly renders the alert without refreshing the page (WebSockets).
-4.  **Transaction Handshake:** The requester chooses the best offer, and the system atomically processes the transaction, declining all other competing offers.
+### Backend
 
----
+1. Open a terminal in [backend](backend).
+2. Run:
 
-## 🛠️ How to Run Locally
+```bash
+# Windows
+.\gradlew.bat bootRun
 
-### 1. Start the Spring Boot Backend
+# macOS/Linux
+./gradlew bootRun
+```
 
-The backend is configured to use an in-memory database out of the box so you don't need to spin up Postgres immediately.
+3. Service URL: http://localhost:8080
+4. Optional H2 console: http://localhost:8080/h2-console
+   - JDBC URL: jdbc:h2:mem:unilendingdb
+   - User: sa
+   - Password: (empty)
 
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
-2. Run the Gradle bootRun task:
-   ```bash
-   # On Windows
-   .\gradlew.bat bootRun
+### Frontend
 
-   # On Mac/Linux
-   ./gradlew bootRun
-   ```
-3. The server will start on `http://localhost:8080`.
-4. *Optional:* Access the database console at `http://localhost:8080/h2-console` (URL: `jdbc:h2:mem:unilendingdb`, username: `sa`, no password).
+1. Open a terminal in [frontend](frontend).
+2. Install dependencies and start the dev server:
 
-### 2. Start the Vite React Frontend
+```bash
+npm install
+npm run dev
+```
 
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install Node dependencies:
-   ```bash
-   npm install
-   ```
-3. Boot the development server:
-   ```bash
-   npm run dev
-   ```
-4. Open the UI at `http://localhost:5173`.
+3. UI URL: http://localhost:5173
 
----
+## Repository Documentation
 
-## 📁 System Design Documentation
+- [1_SYSTEM_ARCHITECTURE.md](1_SYSTEM_ARCHITECTURE.md): High-level component architecture.
+- [2_DATABASE_SCHEMA.md](2_DATABASE_SCHEMA.md): Entity model and indexing strategy.
+- [3_API_DESIGN.md](3_API_DESIGN.md): REST and WebSocket contracts.
+- [4_CORE_BACKEND_LOGIC.md](4_CORE_BACKEND_LOGIC.md): Core backend behavior and flow.
+- [5_STARTUP_EVOLUTION.md](5_STARTUP_EVOLUTION.md): Product evolution roadmap.
 
-If you are looking to evolve or construct upon this architecture, check out the detailed system design plans included in the root directory:
+## Contribution and Change Tracking
 
-*   `1_SYSTEM_ARCHITECTURE.md`: High-Level component design.
-*   `2_DATABASE_SCHEMA.md`: ER Diagram & Indexing strategies.
-*   `3_API_DESIGN.md`: HTTP REST & WebSocket endpoint contracts.
-*   `4_CORE_BACKEND_LOGIC.md`: Snippets for transaction racing & smart routing.
-*   `5_STARTUP_EVOLUTION.md`: Phase 3 scale & AI integration roadmap.
+- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
+
+## Scope Note
+
+This update keeps backend and frontend implementation files untouched and applies only repository-level documentation/process improvements.
