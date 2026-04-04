@@ -11,15 +11,33 @@ export const AuthPage = ({ onLogin }: { onLogin: (user: any) => void }) => {
     hostelBlock: 'Block A'
   });
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [devModeNotice, setDevModeNotice] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSubmitError(null);
+    setDevModeNotice(null);
     try {
       const response = await UserService.register(formData);
       onLogin(response.data);
     } catch (error) {
       console.error('Registration failed:', error);
+
+      if (import.meta.env.DEV) {
+        setDevModeNotice('Backend is unavailable, continuing in offline dev mode.');
+        onLogin({
+          id: `dev-${Date.now()}`,
+          fullName: formData.fullName,
+          email: formData.email,
+          hostelBlock: formData.hostelBlock,
+          trustScore: 5,
+          role: 'STUDENT'
+        });
+      } else {
+        setSubmitError('Unable to connect to server. Please try again in a moment.');
+      }
     } finally {
       setLoading(false);
     }
@@ -79,6 +97,12 @@ export const AuthPage = ({ onLogin }: { onLogin: (user: any) => void }) => {
             {loading ? 'Entering Campus...' : 'Enter Platform'} 
             {!loading && <ArrowRight className="w-5 h-5" />}
           </button>
+          {submitError && (
+            <p className="text-sm text-red-700 bg-red-100 rounded-lg px-3 py-2">{submitError}</p>
+          )}
+          {devModeNotice && (
+            <p className="text-sm text-orange-700 bg-orange-100 rounded-lg px-3 py-2">{devModeNotice}</p>
+          )}
         </form>
       </div>
     </div>
