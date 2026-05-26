@@ -3,6 +3,7 @@ package com.unilending.platform.service;
 import com.unilending.platform.domain.ItemRequest;
 import com.unilending.platform.domain.User;
 import com.unilending.platform.dto.NotificationPayload;
+import com.unilending.platform.repository.ItemRequestRepository;
 import com.unilending.platform.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
@@ -11,17 +12,22 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class MatchingEngineService {
 
     private final UserRepository userRepository;
+    private final ItemRequestRepository requestRepository;
     private final NotificationService notificationService;
 
     @Async
     @Transactional(readOnly = true)
-    public void processNewRequest(ItemRequest request) {
+    public void processNewRequest(UUID requestId) {
+        ItemRequest request = requestRepository.findByIdWithRequester(requestId)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found"));
+
         // 1. Proximity Match (Users in same block)
         List<User> localUsers = userRepository.findByHostelBlock(request.getLocationTag());
 
@@ -45,5 +51,8 @@ public class MatchingEngineService {
         
         // 4. Also broadcast to the location topic freely
         notificationService.broadcastLocalRequest(request.getLocationTag(), payload);
+
+        // 5. Broadcast to campus-wide channel so everyone having the platform is notified
+        notificationService.broadcastLocalRequest("all", payload);
     }
 }

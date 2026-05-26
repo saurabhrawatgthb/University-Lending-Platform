@@ -6,6 +6,7 @@ import com.unilending.platform.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -19,6 +20,11 @@ public class TransactionController {
     @GetMapping("/{id}")
     public Transaction getTransaction(@PathVariable UUID id) {
         return transactionRepository.findById(id).orElseThrow();
+    }
+
+    @GetMapping("/user/{userId}")
+    public List<Transaction> getUserTransactions(@PathVariable UUID userId) {
+        return transactionRepository.findByBorrowerIdOrLenderIdOrderByStartTimeDesc(userId, userId);
     }
 
     @PutMapping("/{id}/status")

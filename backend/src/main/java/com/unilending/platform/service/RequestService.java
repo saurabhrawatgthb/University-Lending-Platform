@@ -22,6 +22,7 @@ public class RequestService {
     private final OfferRepository offerRepository;
     private final UserRepository userRepository;
     private final MatchingEngineService matchingEngineService;
+    private final NotificationService notificationService;
 
     public ItemRequest createRequest(ItemRequest request, UUID requesterId) {
         User requester = userRepository.findById(requesterId)
@@ -29,7 +30,7 @@ public class RequestService {
         request.setRequester(requester);
         ItemRequest savedRequest = requestRepository.save(request);
         
-        matchingEngineService.processNewRequest(savedRequest);
+        matchingEngineService.processNewRequest(savedRequest.getId());
         
         return savedRequest;
     }
@@ -47,7 +48,17 @@ public class RequestService {
         offer.setRequest(request);
         offer.setLender(lender);
         
-        return offerRepository.save(offer);
+        Offer savedOffer = offerRepository.save(offer);
+
+        // Notify the requester in real-time
+        com.unilending.platform.dto.NotificationPayload payload = new com.unilending.platform.dto.NotificationPayload(
+                "NEW_OFFER",
+                lender.getFullName() + " made an offer for your request: " + request.getTitle(),
+                request.getId().toString()
+        );
+        notificationService.sendDirectNotification(request.getRequester(), payload);
+        
+        return savedOffer;
     }
 
     public List<Offer> getOffersForRequest(UUID requestId) {
