@@ -32,9 +32,11 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private UserRole role = UserRole.STUDENT;
 
     @Column(precision = 3, scale = 1)
+    @Builder.Default
     private BigDecimal trustScore = new BigDecimal("5.0");
 
     private String universityName;
