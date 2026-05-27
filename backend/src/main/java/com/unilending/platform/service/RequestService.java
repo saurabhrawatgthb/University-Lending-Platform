@@ -45,10 +45,20 @@ public class RequestService {
         User lender = userRepository.findById(lenderId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
         
-        offer.setRequest(request);
-        offer.setLender(lender);
+        // Prevent duplicate offer insert error: check if offer already exists, then update it
+        Offer offerToSave = offerRepository.findByRequestAndLender(request, lender)
+                .map(existingOffer -> {
+                    existingOffer.setMessage(offer.getMessage());
+                    existingOffer.setStatus(com.unilending.platform.domain.enums.OfferStatus.PENDING);
+                    return existingOffer;
+                })
+                .orElseGet(() -> {
+                    offer.setRequest(request);
+                    offer.setLender(lender);
+                    return offer;
+                });
         
-        Offer savedOffer = offerRepository.save(offer);
+        Offer savedOffer = offerRepository.save(offerToSave);
 
         // Notify the requester in real-time
         com.unilending.platform.dto.NotificationPayload payload = new com.unilending.platform.dto.NotificationPayload(

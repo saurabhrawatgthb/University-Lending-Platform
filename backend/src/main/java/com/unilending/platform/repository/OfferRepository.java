@@ -13,4 +13,5 @@ import java.util.UUID;
 public interface OfferRepository extends JpaRepository<Offer, UUID> {
     List<Offer> findByRequest(ItemRequest request);
     List<Offer> findByRequestAndStatus(ItemRequest request, OfferStatus status);
+    java.util.Optional<Offer> findByRequestAndLender(ItemRequest request, com.unilending.platform.domain.User lender);
 }
