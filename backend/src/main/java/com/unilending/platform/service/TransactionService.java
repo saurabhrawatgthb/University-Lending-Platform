@@ -64,6 +64,13 @@ public class TransactionService {
                 new NotificationPayload("OFFER_ACCEPTED", "Your offer for " + request.getTitle() + " was ACCEPTED!", request.getId().toString())
         );
 
+        // Broadcast REQUEST_FULFILLED campus-wide so all devices instantly refresh
+        notificationService.broadcastLocalRequest("all", new NotificationPayload(
+                "REQUEST_FULFILLED",
+                "Request fulfilled: " + request.getTitle(),
+                request.getId().toString()
+        ));
+
         // Create Transaction
         Transaction tx = Transaction.builder()
                 .request(request)
@@ -74,5 +81,48 @@ public class TransactionService {
                 .build();
 
         return transactionRepository.save(tx);
+    }
+
+    @Transactional
+    public Transaction updateTransactionStatus(UUID txId, TransactionStatus status) {
+        Transaction tx = transactionRepository.findById(txId)
+                .orElseThrow(() -> new IllegalArgumentException("Transaction not found"));
+        
+        tx.setStatus(status);
+        Transaction savedTx = transactionRepository.save(tx);
+
+        String itemTitle = tx.getRequest().getTitle();
+        if (status == TransactionStatus.IN_POSSESSION) {
+            // Notify Lender
+            notificationService.sendDirectNotification(
+                    tx.getLender(),
+                    new NotificationPayload(
+                            "HANDOFF_CONFIRMED",
+                            tx.getBorrower().getFullName() + " confirmed they received your " + itemTitle + "!",
+                            tx.getId().toString()
+                    )
+            );
+        } else if (status == TransactionStatus.RETURNED) {
+            // Notify Lender
+            notificationService.sendDirectNotification(
+                    tx.getLender(),
+                    new NotificationPayload(
+                            "ITEM_RETURNED",
+                            tx.getBorrower().getFullName() + " has returned your " + itemTitle + "!",
+                            tx.getId().toString()
+                    )
+            );
+            // Notify Borrower
+            notificationService.sendDirectNotification(
+                    tx.getBorrower(),
+                    new NotificationPayload(
+                            "ITEM_RETURNED",
+                            "Thank you for returning " + tx.getLender().getFullName() + "'s " + itemTitle + "!",
+                            tx.getId().toString()
+                    )
+            );
+        }
+
+        return savedTx;
     }
 }

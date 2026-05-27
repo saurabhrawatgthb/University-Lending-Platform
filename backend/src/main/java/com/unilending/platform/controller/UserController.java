@@ -18,11 +18,24 @@ public class UserController {
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     public User registerUser(@RequestBody User user) {
-        return userRepository.save(user);
+        return userRepository.findByEmail(user.getEmail())
+                .orElseGet(() -> userRepository.save(user));
     }
     
     @GetMapping("/{id}")
     public User getUser(@PathVariable UUID id) {
         return userRepository.findById(id).orElseThrow();
+    }
+
+    @PutMapping("/{id}/trust-score")
+    public User updateTrustScore(@PathVariable UUID id, @RequestBody java.util.Map<String, Object> payload) {
+        User user = userRepository.findById(id).orElseThrow();
+        Object score = payload.get("trustScore");
+        if (score instanceof Number) {
+            user.setTrustScore(new java.math.BigDecimal(score.toString()));
+        } else if (score instanceof String) {
+            user.setTrustScore(new java.math.BigDecimal((String) score));
+        }
+        return userRepository.save(user);
     }
 }

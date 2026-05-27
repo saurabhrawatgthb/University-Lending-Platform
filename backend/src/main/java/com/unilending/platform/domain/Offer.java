@@ -20,17 +20,18 @@ public class Offer {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "request_id", nullable = false)
     private ItemRequest request;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "lender_id", nullable = false)
     private User lender;
 
     private String message;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private OfferStatus status = OfferStatus.PENDING;
 
     @CreationTimestamp

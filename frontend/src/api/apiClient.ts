@@ -13,6 +13,7 @@ export const apiClient = axios.create({
 export const UserService = {
     register: (userData: any) => apiClient.post('/users/register', userData),
     getUser: (id: string) => apiClient.get(`/users/${id}`),
+    updateTrustScore: (id: string, trustScore: number) => apiClient.put(`/users/${id}/trust-score`, { trustScore }),
 };
 
 export const RequestService = {

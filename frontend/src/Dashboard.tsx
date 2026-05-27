@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { RequestService, TransactionService } from './api/apiClient';
+import { RequestService, TransactionService, UserService } from './api/apiClient';
 import { WebSocketService } from './api/websocketClient';
 import { 
   Plus, Bell, Clock, MapPin, Search, 
   HelpCircle, Check, RefreshCw, Send, 
-  ArrowUpRight, ShieldAlert, CheckCircle2 
+  ArrowUpRight, ShieldAlert, CheckCircle2,
+  Star, MessageSquare, ChevronDown, ChevronUp,
+  Award, TrendingUp, Sparkles, X
 } from 'lucide-react';
 
 export const Dashboard = ({ user }: { user: any }) => {
@@ -14,6 +16,19 @@ export const Dashboard = ({ user }: { user: any }) => {
   const [myTransactions, setMyTransactions] = useState<any[]>([]);
   const [selectedRequestOffers, setSelectedRequestOffers] = useState<{ [reqId: string]: any[] }>({});
   
+  // Custom Toast state
+  const [toasts, setToasts] = useState<any[]>([]);
+  
+  // Coordination chat state
+  const [txChats, setTxChats] = useState<{ [txId: string]: any[] }>({});
+  const [openChatTxId, setOpenChatTxId] = useState<string | null>(null);
+  const [chatMessage, setChatMessage] = useState('');
+
+  // Rating Feedback Loop state
+  const [ratedTxIds, setRatedTxIds] = useState<{ [txId: string]: boolean }>({});
+  const [ratingScore, setRatingScore] = useState(5);
+  const [ratingComment, setRatingComment] = useState('');
+
   // Modal & Forms State
   const [showModal, setShowModal] = useState(false);
   const [newReq, setNewReq] = useState({ 
@@ -32,6 +47,15 @@ export const Dashboard = ({ user }: { user: any }) => {
 
   // Search Filter
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Toast Helper
+  const addToast = (type: string, message: string) => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, type, message }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  };
 
   // Fetch all dashboard data
   const loadData = () => {
@@ -67,24 +91,24 @@ export const Dashboard = ({ user }: { user: any }) => {
       (payload) => {
         // Direct personal notification
         setNotifications(prev => [payload, ...prev]);
-        loadData(); // Hot reload data on new offer/acceptance
+        loadData(); // Hot reload data on new offer/acceptance/status updates
         
-        // Skip self alert popups
+        // Skip self alert toast popups
         if (payload.message && user?.fullName && payload.message.startsWith(user.fullName)) {
           return;
         }
-        alert(`🔔 CampusLend Alert:\n\n${payload.message}`);
+        addToast(payload.type || 'INFO', payload.message);
       },
       (payload) => {
-        // Local broadcast (Someone nearby requested an item)
+        // Local broadcast (Someone nearby requested an item or request fulfilled)
         setNotifications(prev => [payload, ...prev]);
         loadData(); // Hot reload feed
         
-        // Skip self alert popups
+        // Skip self alert toast popups
         if (payload.message && user?.fullName && payload.message.startsWith(user.fullName)) {
           return;
         }
-        alert(`📢 Live Campus Broadcast:\n\n${payload.message}`);
+        addToast(payload.type || 'BROADCAST', payload.message);
       },
       user.id,
       user.hostelBlock || 'Block A'
@@ -102,9 +126,11 @@ export const Dashboard = ({ user }: { user: any }) => {
       await RequestService.createRequest({ ...newReq, locationTag: user.hostelBlock || 'Block A' }, user.id);
       setShowModal(false);
       loadData();
+      addToast('SUCCESS', 'Your query has been posted campus-wide! WebSockets are broadcasting...');
       setNewReq({ title: '', category: 'ELECTRONICS', urgency: 'HIGH', durationHours: 2, description: '' });
     } catch (err) {
       console.error('Failed to post request:', err);
+      addToast('ERROR', 'Failed to publish request.');
     }
   };
 
@@ -124,9 +150,10 @@ export const Dashboard = ({ user }: { user: any }) => {
       await RequestService.makeOffer(offeredRequestId, { message: offerMessage }, user.id);
       setShowOfferModal(false);
       loadData();
-      alert('Offer submitted successfully! The borrower has been notified.');
+      addToast('SUCCESS', 'Offer submitted! The borrower has been notified in real-time.');
     } catch (err) {
       console.error('Failed to submit offer:', err);
+      addToast('ERROR', 'Failed to submit offer.');
     } finally {
       setSubmittingOffer(false);
     }
@@ -139,9 +166,10 @@ export const Dashboard = ({ user }: { user: any }) => {
       await RequestService.acceptOffer(requestId, offerId);
       loadData();
       setActiveTab('transactions');
-      alert('Offer accepted! You can coordinate the handoff in the active handoffs tab.');
+      addToast('SUCCESS', 'Offer Accepted! Transaction generated and synced.');
     } catch (err) {
       console.error('Failed to accept offer:', err);
+      addToast('ERROR', 'Failed to accept offer.');
     }
   };
 
@@ -150,10 +178,119 @@ export const Dashboard = ({ user }: { user: any }) => {
     try {
       await TransactionService.updateTransactionStatus(txId, status);
       loadData();
+      addToast('SUCCESS', `Status updated to ${status.replace('_', ' ')}!`);
     } catch (err) {
       console.error('Failed to update transaction status:', err);
+      addToast('ERROR', 'Failed to sync status update.');
     }
   };
+
+  // Star Rating feedback loop submitter
+  const handleSubmitRating = async (tx: any, counterpart: any) => {
+    if (!counterpart?.id) return;
+    try {
+      const currentScore = counterpart.trustScore ?? 5.0;
+      // Weighted average: weight the existing score by 4 and add new rating, divide by 5
+      const newScore = parseFloat(((currentScore * 4 + ratingScore) / 5).toFixed(1));
+      
+      await UserService.updateTrustScore(counterpart.id, newScore);
+      
+      setRatedTxIds(prev => ({ ...prev, [tx.id]: true }));
+      setRatingComment('');
+      setRatingScore(5);
+      
+      addToast('SUCCESS', `⭐ Trust score for ${counterpart.fullName} updated to ${newScore}!`);
+      loadData(); // Reload stats and scores
+    } catch (err) {
+      console.error('Failed to submit rating:', err);
+      addToast('ERROR', 'Failed to update trust score.');
+    }
+  };
+
+  // Toggle Coordinate Chats
+  const handleToggleChat = (tx: any) => {
+    const txId = tx.id;
+    if (openChatTxId === txId) {
+      setOpenChatTxId(null);
+      return;
+    }
+    
+    // Initialize with mock coord messages if empty
+    if (!txChats[txId]) {
+      const isBorrower = tx.borrower?.id === user?.id;
+      const counterpartName = isBorrower ? tx.lender?.fullName : tx.borrower?.fullName;
+      const myName = user?.fullName || 'Me';
+      const itemTitle = tx.request?.title || 'item';
+      
+      let initialMsgs = [];
+      if (tx.status === 'PENDING_EXCHANGE') {
+        initialMsgs = [
+          { sender: counterpartName, text: `Hey ${myName}! I have the ${itemTitle} ready for you. Shall we meet up outside the lobby?`, time: '10:05 AM' },
+          { sender: myName, text: `Hi! That sounds great. I can come over in about 10 minutes. Does that work for you?`, time: '10:07 AM' },
+          { sender: counterpartName, text: `Perfect! I'll wait near the entrance. See you soon!`, time: '10:08 AM' }
+        ];
+      } else if (tx.status === 'IN_POSSESSION') {
+        initialMsgs = [
+          { sender: myName, text: `Hey, just checking in. The ${itemTitle} works beautifully. Thanks again!`, time: 'Yesterday' },
+          { sender: counterpartName, text: `Awesome! Glad it helped. Let me know whenever you're ready to return it.`, time: 'Yesterday' }
+        ];
+      } else {
+        initialMsgs = [
+          { sender: myName, text: `Hey! I've returned the ${itemTitle} back. Let me know if everything is in order.`, time: '2 hours ago' },
+          { sender: counterpartName, text: `Received! Everything looks perfect. Thanks for the quick return!`, time: '1 hour ago' }
+        ];
+      }
+      setTxChats(prev => ({ ...prev, [txId]: initialMsgs }));
+    }
+    setOpenChatTxId(txId);
+  };
+
+  // Send coordination message
+  const handleSendChatMessage = (txId: string, counterpartName: string) => {
+    if (!chatMessage.trim()) return;
+    
+    const myName = user?.fullName || 'Me';
+    const newMsg = { sender: myName, text: chatMessage, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    
+    setTxChats(prev => ({
+      ...prev,
+      [txId]: [...(prev[txId] || []), newMsg]
+    }));
+    setChatMessage('');
+    
+    // Trigger mock response after 1.5 seconds to make the app feel alive!
+    setTimeout(() => {
+      let responseText = "Sure, sounds perfect! Let's do that.";
+      if (chatMessage.toLowerCase().includes('where') || chatMessage.toLowerCase().includes('meet')) {
+        responseText = `Let's meet near the entrance block. I'm wearing a blue shirt!`;
+      } else if (chatMessage.toLowerCase().includes('thank') || chatMessage.toLowerCase().includes('thanks')) {
+        responseText = `You're very welcome! Glad I could help.`;
+      } else if (chatMessage.toLowerCase().includes('late') || chatMessage.toLowerCase().includes('delay')) {
+        responseText = `No worries at all! Take your time.`;
+      }
+      
+      const botMsg = { sender: counterpartName, text: responseText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+      
+      setTxChats(prev => ({
+        ...prev,
+        [txId]: [...(prev[txId] || []), botMsg]
+      }));
+      addToast('CHAT', `💬 Coordination ping from ${counterpartName}`);
+    }, 1500);
+  };
+
+  // Dynamic Karma calculations
+  const completedLends = myTransactions.filter(tx => tx.status === 'RETURNED' && tx.lender?.id === user?.id).length;
+  const completedBorrows = myTransactions.filter(tx => tx.status === 'RETURNED' && tx.borrower?.id === user?.id).length;
+  const karmaPoints = 100 + (completedLends * 50) + (completedBorrows * 15);
+  
+  const getKarmaLevel = (points: number) => {
+    if (points < 150) return { title: 'Level 1: Novice Helper', min: 100, max: 150, progress: ((points - 100) / 50) * 100 };
+    if (points < 250) return { title: 'Level 2: Reliable Helper', min: 150, max: 250, progress: ((points - 150) / 100) * 100 };
+    if (points < 400) return { title: 'Level 3: Good Samaritan', min: 250, max: 400, progress: ((points - 250) / 150) * 100 };
+    return { title: 'Level 4: Campus Legend', min: 400, max: 600, progress: Math.min(100, ((points - 400) / 200) * 100) };
+  };
+  const karmaLevel = getKarmaLevel(karmaPoints);
 
   // Filtering requests
   const filteredRequests = requests.filter(req => {
@@ -169,7 +306,8 @@ export const Dashboard = ({ user }: { user: any }) => {
   const otherRequests = filteredRequests.filter(req => req.requester?.id !== user?.id && req.status === 'OPEN');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-indigo-50/20 pb-20 font-sans text-slate-800 antialiased">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-indigo-50/20 pb-20 font-sans text-slate-800 antialiased relative">
+      
       {/* Premium Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-40 shadow-sm transition-all duration-300">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -327,10 +465,10 @@ export const Dashboard = ({ user }: { user: any }) => {
                             <h3 className="text-lg font-bold text-slate-900">{req.title}</h3>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                               req.status === 'OPEN' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                              req.status === 'FULFILLED' ? 'bg-indigo-50 text-indigo-600' :
+                              req.status === 'FULFILLED' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
                               'bg-slate-100 text-slate-600'
                             }`}>
-                              {req.status}
+                              {req.status === 'FULFILLED' ? 'FULFILLED' : req.status}
                             </span>
                           </div>
                           <p className="text-xs text-slate-500">Posted on: {req.createdAt ? new Date(req.createdAt).toLocaleString() : ''}</p>
@@ -339,9 +477,9 @@ export const Dashboard = ({ user }: { user: any }) => {
                         {req.status === 'OPEN' && (
                           <button 
                             onClick={() => loadOffersForRequest(req.id)}
-                            className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3 rounded-lg"
+                            className="text-xs flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 font-bold"
                           >
-                            <RefreshCw className="w-3.5 h-3.5" /> Check for New Offers
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin-slow" /> Check for New Offers
                           </button>
                         )}
                       </div>
@@ -452,14 +590,110 @@ export const Dashboard = ({ user }: { user: any }) => {
                               </p>
                             </div>
                           </div>
+
+                          {/* Stepper Progress Bar */}
+                          <div className="mt-6 mb-6">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Handoff Progress Stepper</p>
+                            <div className="relative flex items-center justify-between">
+                              <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-0.5 bg-slate-100 z-0" />
+                              <div 
+                                className="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 bg-primary-500 z-0 transition-all duration-500"
+                                style={{
+                                  width: tx.status === 'PENDING_EXCHANGE' ? '0%' :
+                                         tx.status === 'IN_POSSESSION' ? '50%' : '100%'
+                                }}
+                              />
+                              
+                              {[
+                                { status: 'PENDING_EXCHANGE', label: '1. Agreement', sub: 'Meetup Pending' },
+                                { status: 'IN_POSSESSION', label: '2. In Use', sub: 'With Borrower' },
+                                { status: 'RETURNED', label: '3. Completed', sub: 'Item Returned' }
+                              ].map((step, idx) => {
+                                const isCompleted = 
+                                  tx.status === 'RETURNED' || 
+                                  (tx.status === 'IN_POSSESSION' && idx < 2) || 
+                                  (tx.status === 'PENDING_EXCHANGE' && idx < 1);
+                                  
+                                const isActive = tx.status === step.status;
+                                
+                                return (
+                                  <div key={idx} className="relative z-10 flex flex-col items-center">
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all duration-300 border shadow ${
+                                      isActive ? 'bg-primary-600 text-white border-primary-600 ring-4 ring-primary-500/20' :
+                                      isCompleted ? 'bg-emerald-500 text-white border-emerald-500' :
+                                      'bg-white text-slate-400 border-slate-200'
+                                    }`}>
+                                      {isCompleted ? <Check className="w-4 h-4" /> : idx + 1}
+                                    </div>
+                                    <span className={`text-[10px] font-bold mt-2 ${isActive ? 'text-primary-600' : isCompleted ? 'text-emerald-600' : 'text-slate-400'}`}>{step.label}</span>
+                                    <span className="text-[8px] text-slate-400 mt-0.5">{step.sub}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Coordinator Chat Panel Toggle */}
+                          <div className="mt-4 border-t border-slate-100 pt-4">
+                            <button
+                              onClick={() => handleToggleChat(tx)}
+                              className="w-full flex items-center justify-between text-xs font-bold text-slate-500 hover:text-slate-800 focus:outline-none py-1.5 px-2 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors"
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <MessageSquare className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                                {openChatTxId === tx.id ? 'Hide Meetup Coordination' : 'Show Meetup Coordination (Live Chat)'}
+                              </span>
+                              {openChatTxId === tx.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+
+                            {/* coordination chat area */}
+                            {openChatTxId === tx.id && (
+                              <div className="mt-3 bg-slate-50 rounded-2xl p-4 border border-slate-200/50 flex flex-col gap-3 shadow-inner">
+                                <div className="max-h-40 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-200">
+                                  {(txChats[tx.id] || []).map((msg, midx) => {
+                                    const isMe = msg.sender === (user?.fullName || 'Me');
+                                    return (
+                                      <div key={midx} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                                        <span className="text-[8px] text-slate-400 font-bold mb-0.5">{msg.sender}</span>
+                                        <div className={`max-w-[85%] px-3 py-1.5 rounded-2xl text-xs ${
+                                          isMe ? 'bg-primary-600 text-white rounded-tr-none' : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
+                                        }`}>
+                                          {msg.text}
+                                        </div>
+                                        <span className="text-[7px] text-slate-400 mt-0.5">{msg.time}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex gap-2 border-t border-slate-200/50 pt-2.5">
+                                  <input
+                                    type="text"
+                                    placeholder="Type coordination message..."
+                                    className="flex-1 text-xs px-3 py-1.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 bg-white"
+                                    value={chatMessage}
+                                    onChange={e => setChatMessage(e.target.value)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleSendChatMessage(tx.id, counterpart.fullName);
+                                    }}
+                                  />
+                                  <button
+                                    onClick={() => handleSendChatMessage(tx.id, counterpart.fullName)}
+                                    className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-xl flex items-center justify-center"
+                                  >
+                                    <Send className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {/* Status update buttons */}
-                        <div className="border-t border-slate-100 pt-4 flex gap-3">
+                        <div className="border-t border-slate-100 pt-4 flex flex-col gap-3">
                           {tx.status === 'PENDING_EXCHANGE' && isBorrower && (
                             <button 
                               onClick={() => handleUpdateStatus(tx.id, 'IN_POSSESSION')}
-                              className="w-full bg-emerald-600 text-white font-semibold text-sm py-2.5 px-4 rounded-xl hover:bg-emerald-700 active:scale-98 transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-500/10"
+                              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm py-2.5 px-4 rounded-xl active:scale-98 transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-emerald-500/10"
                             >
                               <CheckCircle2 className="w-4 h-4" /> Confirm Handoff (I Received the Item)
                             </button>
@@ -468,7 +702,7 @@ export const Dashboard = ({ user }: { user: any }) => {
                           {tx.status === 'IN_POSSESSION' && isBorrower && (
                             <button 
                               onClick={() => handleUpdateStatus(tx.id, 'RETURNED')}
-                              className="w-full bg-indigo-600 text-white font-semibold text-sm py-2.5 px-4 rounded-xl hover:bg-indigo-700 active:scale-98 transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-500/10"
+                              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm py-2.5 px-4 rounded-xl active:scale-98 transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-indigo-500/10"
                             >
                               <CheckCircle2 className="w-4 h-4" /> I Returned the Item
                             </button>
@@ -476,13 +710,67 @@ export const Dashboard = ({ user }: { user: any }) => {
                           
                           {(!isBorrower && tx.status !== 'RETURNED') && (
                             <div className="w-full text-center text-xs text-slate-400 bg-slate-50/50 py-3 px-4 rounded-xl border border-slate-200/50 flex items-center justify-center gap-1.5 italic font-medium">
-                              <ShieldAlert className="w-4 h-4 text-amber-500 animate-spin" /> Waiting for borrower to update handoff state...
+                              <ShieldAlert className="w-4 h-4 text-amber-500 animate-pulse" /> Waiting for borrower to update handoff state...
                             </div>
                           )}
                           
                           {tx.status === 'RETURNED' && (
-                            <div className="w-full text-center text-xs text-emerald-600 bg-emerald-50 py-3 px-4 rounded-xl border border-emerald-100 flex items-center justify-center gap-1.5 font-semibold">
-                              <CheckCircle2 className="w-4 h-4" /> Handoff Complete & Synced
+                            <div className="w-full">
+                              <div className="text-center text-xs text-emerald-600 bg-emerald-50 py-3 px-4 rounded-xl border border-emerald-100 flex items-center justify-center gap-1.5 font-semibold">
+                                <CheckCircle2 className="w-4 h-4" /> Handoff Complete & Synced
+                              </div>
+
+                              {/* Star Rating feedback loop on returned items */}
+                              {!ratedTxIds[tx.id] ? (
+                                <div className="mt-4 bg-slate-50 border border-slate-100 rounded-2xl p-5 shadow-inner">
+                                  <h4 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-1">
+                                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" /> Review & Rate {counterpart.fullName}
+                                  </h4>
+                                  <p className="text-xs text-slate-500 mb-4">Your rating directly influences their campus trust score and lend qualification limit.</p>
+                                  
+                                  <div className="flex gap-2 items-center mb-4">
+                                    {[1, 2, 3, 4, 5].map(val => (
+                                      <button 
+                                        key={val}
+                                        type="button"
+                                        onClick={() => setRatingScore(val)}
+                                        className="focus:outline-none transition-transform active:scale-95"
+                                      >
+                                        <Star className={`w-7 h-7 ${val <= ratingScore ? 'text-amber-400 fill-amber-400' : 'text-slate-300'}`} />
+                                      </button>
+                                    ))}
+                                    <span className="text-xs font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md ml-2">
+                                      {ratingScore === 5 ? 'Excellent ⭐ 5/5' :
+                                       ratingScore === 4 ? 'Very Good ⭐ 4/5' :
+                                       ratingScore === 3 ? 'Good ⭐ 3/5' :
+                                       ratingScore === 2 ? 'Fair ⭐ 2/5' : 'Needs Work ⭐ 1/5'}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="mb-4">
+                                    <textarea 
+                                      rows={2}
+                                      placeholder={`Write a quick review about ${counterpart.fullName} (e.g. Prompt handoff, clean item)...`}
+                                      className="w-full text-xs px-3 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 bg-white"
+                                      value={ratingComment}
+                                      onChange={e => setRatingComment(e.target.value)}
+                                    />
+                                  </div>
+                                  
+                                  <button 
+                                    onClick={() => handleSubmitRating(tx, counterpart)}
+                                    className="w-full bg-gradient-to-r from-amber-500 to-primary-600 hover:from-amber-600 hover:to-primary-700 text-white font-bold text-xs py-2 px-4 rounded-xl shadow-sm transition-all active:scale-[0.98]"
+                                  >
+                                    Submit Review & Boost Trust Score
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="mt-4 bg-emerald-50/50 border border-emerald-100/50 rounded-2xl p-4 text-center">
+                                  <p className="text-xs font-semibold text-emerald-800 flex items-center justify-center gap-1.5">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Review Submitted Successfully! Trust Score Synced.
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -509,12 +797,12 @@ export const Dashboard = ({ user }: { user: any }) => {
 
                 <div className="space-y-3">
                   {notifications.map((n, i) => (
-                    <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4 flex gap-4 items-start shadow-sm hover:shadow-md transition-shadow">
+                    <div key={i} className="bg-white border border-slate-100 rounded-2xl p-4 flex gap-4 items-start shadow-sm hover:shadow-md transition-shadow animate-slide-in">
                       <div className={`p-2.5 rounded-xl ${
-                        n.type === 'NEW_REQUEST_NEARBY' ? 'bg-rose-50 text-rose-500' :
-                        n.type === 'NEW_OFFER' ? 'bg-amber-50 text-amber-500' :
-                        n.type === 'OFFER_ACCEPTED' ? 'bg-emerald-50 text-emerald-500' :
-                        'bg-slate-100 text-slate-500'
+                        n.type === 'NEW_REQUEST_NEARBY' ? 'bg-rose-50 text-rose-500 border border-rose-100' :
+                        n.type === 'NEW_OFFER' ? 'bg-amber-50 text-amber-500 border border-amber-100' :
+                        n.type === 'OFFER_ACCEPTED' ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' :
+                        'bg-indigo-50 text-indigo-500 border border-indigo-100'
                       }`}>
                         <Bell className="w-4 h-4" />
                       </div>
@@ -541,31 +829,52 @@ export const Dashboard = ({ user }: { user: any }) => {
 
           {/* Right Sidebar - Stats & Live Pinned Feed */}
           <div className="w-full lg:w-80 space-y-6">
+            
+            {/* Karma points with animated progression levels */}
             <div className="bg-gradient-to-tr from-primary-600 via-indigo-600 to-indigo-800 rounded-3xl p-6 text-white shadow-xl shadow-indigo-500/20 relative overflow-hidden">
-              <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-xl" />
-              <h3 className="text-sm font-medium bg-white/20 w-fit px-3 py-1 rounded-full">Campus Karma Rank</h3>
-              <p className="text-4xl font-extrabold mt-6 mb-2 tracking-tight">420 pts</p>
-              <p className="text-xs text-indigo-100 leading-normal">You made 8 successful lends this semester. Life Saver Status!</p>
+              <div className="absolute -top-12 -right-12 w-32 h-32 bg-white/10 rounded-full blur-xl animate-pulse" />
+              <h3 className="text-xs font-medium bg-white/20 w-fit px-3 py-1 rounded-full flex items-center gap-1.5">
+                <Award className="w-3.5 h-3.5 text-amber-300 animate-bounce" /> {karmaLevel.title}
+              </h3>
               
-              <button disabled className="w-full bg-white text-indigo-900 hover:bg-slate-50 transition-all rounded-2xl py-3 text-xs font-bold mt-6 shadow-sm disabled:opacity-50">
-                Redeem Campus Rewards
+              <div className="mt-6 mb-2 flex justify-between items-baseline">
+                <p className="text-4xl font-extrabold tracking-tight">{karmaPoints} <span className="text-xs font-normal text-indigo-200">Karma</span></p>
+                <p className="text-xs text-indigo-100 font-semibold">{karmaLevel.progress.toFixed(0)}% level up</p>
+              </div>
+
+              {/* level progression bar */}
+              <div className="w-full h-2 bg-indigo-950/40 rounded-full overflow-hidden mb-4 border border-indigo-200/10">
+                <div 
+                  className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 rounded-full transition-all duration-1000 shadow-inner"
+                  style={{ width: `${karmaLevel.progress}%` }}
+                />
+              </div>
+
+              <p className="text-[11px] text-indigo-100 leading-normal">
+                Completed: <span className="font-bold text-white">{completedLends} Lends</span> (+50 pts ea) & <span className="font-bold text-white">{completedBorrows} Borrows</span> (+15 pts ea).
+              </p>
+              
+              <button disabled className="w-full bg-white text-indigo-900 hover:bg-slate-50 transition-all rounded-2xl py-3 text-xs font-bold mt-6 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1">
+                <TrendingUp className="w-4 h-4 text-emerald-600" /> Redeem Campus Rewards
               </button>
             </div>
             
+            {/* auto scrolling glassmorphic campus stream */}
             <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-5">
               <h3 className="font-bold text-slate-900 text-sm mb-4 flex items-center justify-between">
                 Live Campus Stream
-                <span className="flex h-2 w-2 relative">
+                <span className="flex h-2.5 w-2.5 relative">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
               </h3>
-              <div className="space-y-4">
-                {notifications.slice(0, 4).map((n, i) => (
-                  <div key={i} className="flex gap-3 items-start border-b border-slate-50 pb-3 last:border-0 last:pb-0">
-                    <div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0" />
+              <div className="space-y-4 max-h-60 overflow-y-auto pr-1">
+                {notifications.map((n, i) => (
+                  <div key={i} className="flex gap-3 items-start border-b border-slate-50 pb-3 last:border-0 last:pb-0 animate-slide-in">
+                    <div className="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-primary-500 to-indigo-500 mt-1 shrink-0 shadow shadow-indigo-300" />
                     <div>
                       <p className="text-xs font-medium text-slate-700 leading-snug">{n.message}</p>
+                      <span className="text-[8px] text-slate-400 font-bold block mt-0.5">{n.type?.replace('_', ' ')}</span>
                     </div>
                   </div>
                 ))}
@@ -688,6 +997,34 @@ export const Dashboard = ({ user }: { user: any }) => {
           </div>
         </div>
       )}
+
+      {/* Toast Notification Container */}
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
+        {toasts.map(t => (
+          <div 
+            key={t.id} 
+            className="pointer-events-auto p-4 rounded-2xl shadow-xl border backdrop-blur-md animate-slide-in flex items-start gap-3 bg-white/95 border-slate-200/80 transition-all duration-300"
+          >
+            <div className={`p-1.5 rounded-lg shrink-0 ${
+              t.type === 'NEW_OFFER' || t.type === 'OFFER' ? 'bg-amber-50 text-amber-500 border border-amber-100' :
+              t.type === 'OFFER_ACCEPTED' || t.type === 'SUCCESS' ? 'bg-emerald-50 text-emerald-500 border border-emerald-100' :
+              t.type === 'CHAT' ? 'bg-indigo-50 text-indigo-500 border border-indigo-100' :
+              t.type === 'HANDOFF_CONFIRMED' || t.type === 'ITEM_RETURNED' ? 'bg-primary-50 text-primary-500 border border-primary-100' :
+              'bg-rose-50 text-rose-500 border border-rose-100'
+            }`}>
+              <Bell className="w-4 h-4" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">{t.type?.replace('_', ' ') || 'ALERT'}</p>
+              <p className="text-sm font-semibold text-slate-800 leading-snug">{t.message}</p>
+            </div>
+            <button onClick={() => setToasts(prev => prev.filter(item => item.id !== t.id))} className="text-slate-400 hover:text-slate-600 focus:outline-none">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
+      
     </div>
   );
 };

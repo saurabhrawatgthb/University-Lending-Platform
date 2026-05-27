@@ -20,23 +20,24 @@ public class Transaction {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "request_id", nullable = false)
     private ItemRequest request;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "offer_id", nullable = false)
     private Offer offer;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "borrower_id", nullable = false)
     private User borrower;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "lender_id", nullable = false)
     private User lender;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private TransactionStatus status = TransactionStatus.PENDING_EXCHANGE;
 
     @CreationTimestamp

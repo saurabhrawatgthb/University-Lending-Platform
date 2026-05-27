@@ -21,7 +21,7 @@ public class ItemRequest {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "requester_id", nullable = false)
     private User requester;
 
@@ -38,6 +38,7 @@ public class ItemRequest {
     private String locationTag;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private RequestStatus status = RequestStatus.OPEN;
 
     @CreationTimestamp

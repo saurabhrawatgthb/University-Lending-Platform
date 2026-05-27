@@ -16,6 +16,7 @@ import java.util.UUID;
 public class TransactionController {
 
     private final TransactionRepository transactionRepository;
+    private final com.unilending.platform.service.TransactionService transactionService;
 
     @GetMapping("/{id}")
     public Transaction getTransaction(@PathVariable UUID id) {
@@ -29,8 +30,6 @@ public class TransactionController {
 
     @PutMapping("/{id}/status")
     public Transaction updateStatus(@PathVariable UUID id, @RequestBody Map<String, String> payload) {
-        Transaction tx = transactionRepository.findById(id).orElseThrow();
-        tx.setStatus(TransactionStatus.valueOf(payload.get("status")));
-        return transactionRepository.save(tx);
+        return transactionService.updateTransactionStatus(id, TransactionStatus.valueOf(payload.get("status")));
     }
 }
