@@ -6,10 +6,34 @@ const Dashboard = lazy(() =>
 );
 
 function App() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<any>(() => {
+    const saved = localStorage.getItem('campuslend_user');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (err) {
+        console.error('Failed to parse persisted user:', err);
+      }
+    }
+    return null;
+  });
+
+  const handleLogin = (loggedUser: any) => {
+    setUser(loggedUser);
+    if (loggedUser) {
+      localStorage.setItem('campuslend_user', JSON.stringify(loggedUser));
+    } else {
+      localStorage.removeItem('campuslend_user');
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('campuslend_user');
+  };
 
   if (!user) {
-    return <AuthPage onLogin={setUser} />;
+    return <AuthPage onLogin={handleLogin} />;
   }
 
   return (
@@ -20,7 +44,7 @@ function App() {
         </div>
       }
     >
-      <Dashboard user={user} />
+      <Dashboard user={user} onLogout={handleLogout} />
     </Suspense>
   );
 }

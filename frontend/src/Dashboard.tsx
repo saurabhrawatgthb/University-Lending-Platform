@@ -9,7 +9,7 @@ import {
   Award, TrendingUp, Sparkles, X
 } from 'lucide-react';
 
-export const Dashboard = ({ user }: { user: any }) => {
+export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void }) => {
   const [activeTab, setActiveTab] = useState<'feed' | 'my-requests' | 'transactions' | 'alerts'>('feed');
   const [requests, setRequests] = useState<any[]>([]);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -303,7 +303,7 @@ export const Dashboard = ({ user }: { user: any }) => {
   });
 
   const myRequests = requests.filter(req => req.requester?.id === user?.id);
-  const otherRequests = filteredRequests.filter(req => req.requester?.id !== user?.id && req.status === 'OPEN');
+  const otherRequests = filteredRequests.filter(req => req.status === 'OPEN');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-slate-100 to-indigo-50/20 pb-20 font-sans text-slate-800 antialiased relative">
@@ -324,6 +324,14 @@ export const Dashboard = ({ user }: { user: any }) => {
                 <MapPin className="w-3 h-3 text-primary-500" /> {user?.hostelBlock || 'Block A'} • ⭐ {user?.trustScore ?? '5.0'}
               </p>
             </div>
+            {onLogout && (
+              <button 
+                onClick={onLogout}
+                className="text-xs font-bold text-slate-500 hover:text-slate-900 border border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 py-1.5 px-3 rounded-lg transition-all"
+              >
+                Log Out
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -430,12 +438,18 @@ export const Dashboard = ({ user }: { user: any }) => {
                           </div>
                         </div>
 
-                        <button 
-                          onClick={() => openOfferModal(req.id)} 
-                          className="w-full bg-gradient-to-r from-primary-600 to-indigo-600 text-white font-semibold text-sm py-2.5 px-4 rounded-xl hover:from-primary-700 hover:to-indigo-700 active:scale-[0.98] transition-all shadow-sm shadow-primary-500/10"
-                        >
-                          Offer Help
-                        </button>
+                        {req.requester?.id === user?.id ? (
+                          <div className="w-full text-center text-xs text-primary-600 bg-primary-50 py-2.5 px-4 rounded-xl border border-primary-100 font-bold">
+                            Your Active Request
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => openOfferModal(req.id)} 
+                            className="w-full bg-gradient-to-r from-primary-600 to-indigo-600 text-white font-semibold text-sm py-2.5 px-4 rounded-xl hover:from-primary-700 hover:to-indigo-700 active:scale-[0.98] transition-all shadow-sm shadow-primary-500/10"
+                          >
+                            Offer Help
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

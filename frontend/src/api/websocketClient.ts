@@ -1,8 +1,20 @@
 import { Client, type IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
-// WebSocket URL (Reads VITE_WS_URL environment variable, falls back to relative or localhost)
-const WS_URL = import.meta.env.VITE_WS_URL || (import.meta.env.PROD ? '/ws' : 'http://localhost:8080/ws');
+// WebSocket URL (Reads VITE_WS_URL, dynamically infers from API base, or falls back to relative/localhost)
+const getWsUrl = () => {
+    if (import.meta.env.VITE_WS_URL) {
+        return import.meta.env.VITE_WS_URL;
+    }
+    const apiBase = import.meta.env.VITE_API_BASE_URL;
+    if (apiBase && apiBase.startsWith('http')) {
+        // Strip trailing slash and api path, then append /ws
+        return apiBase.replace(/\/api\/v1\/?$/, '/ws').replace(/\/api\/?$/, '/ws');
+    }
+    return import.meta.env.PROD ? '/ws' : 'http://localhost:8080/ws';
+};
+
+const WS_URL = getWsUrl();
 
 export class WebSocketService {
     private client: Client;
