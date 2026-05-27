@@ -48,6 +48,9 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
   // Search Filter
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Dev Mode Helper (user ID starts with 'dev-' when backend is unavailable)
+  const isDevMode = !!user?.id?.toString().startsWith('dev-');
+
   // Toast Helper
   const addToast = (type: string, message: string) => {
     const id = Date.now();
@@ -60,6 +63,9 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
   // Fetch all dashboard data
   const loadData = () => {
     if (!user?.id) return;
+
+    // In dev mode, do nothing — data is managed purely in local state
+    if (isDevMode) return;
 
     // 1. Load active requests feed and auto-fetch offers for own requests
     RequestService.getFeed().then(res => {
@@ -79,15 +85,15 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
     }).catch(err => console.error('Failed to load transactions:', err));
 
     // 3. Load historical notifications from DB
-    if (!user.id.toString().startsWith('dev-')) {
-      NotificationService.getNotifications(user.id).then(res => {
-        setNotifications(res.data || []);
-      }).catch(err => console.error('Failed to load historical notifications:', err));
-    }
+    NotificationService.getNotifications(user.id).then(res => {
+      setNotifications(res.data || []);
+    }).catch(err => console.error('Failed to load historical notifications:', err));
   };
 
   // Fetch offers for a specific request
   const loadOffersForRequest = (requestId: string) => {
+    // In dev mode, offers are managed in local state — no REST call
+    if (isDevMode) return;
     RequestService.getOffers(requestId).then(res => {
       setSelectedRequestOffers(prev => ({
         ...prev,
@@ -98,6 +104,51 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
 
   useEffect(() => {
     if (!user) return;
+
+    // In dev mode, populate with mock data and skip WebSocket/REST
+    if (isDevMode) {
+      const mockRequests = [
+        {
+          id: `mock-req-1`,
+          title: 'USB-C Laptop Charger',
+          description: 'My laptop is about to die and I have a presentation in 30 minutes. Need it urgently!',
+          category: 'ELECTRONICS',
+          urgency: 'HIGH',
+          durationHours: 2,
+          locationTag: user.hostelBlock || 'Block A',
+          status: 'OPEN',
+          createdAt: new Date().toISOString(),
+          requester: { id: `mock-other-1`, fullName: 'Priya Sharma', trustScore: 4.8 }
+        },
+        {
+          id: `mock-req-2`,
+          title: 'Scientific Calculator',
+          description: 'Have a math exam at 3 PM. Forgot mine at home over the weekend.',
+          category: 'STATIONERY',
+          urgency: 'MEDIUM',
+          durationHours: 3,
+          locationTag: 'Block B',
+          status: 'OPEN',
+          createdAt: new Date(Date.now() - 1800000).toISOString(),
+          requester: { id: `mock-other-2`, fullName: 'Rahul Verma', trustScore: 4.5 }
+        },
+        {
+          id: `mock-req-3`,
+          title: 'Umbrella',
+          description: 'It started raining suddenly. Going home for dinner across campus.',
+          category: 'CLOTHING',
+          urgency: 'LOW',
+          durationHours: 1,
+          locationTag: user.hostelBlock || 'Block A',
+          status: 'OPEN',
+          createdAt: new Date(Date.now() - 3600000).toISOString(),
+          requester: { id: `mock-other-3`, fullName: 'Anjali Singh', trustScore: 5.0 }
+        }
+      ];
+      setRequests(mockRequests);
+      return;
+    }
+
     loadData();
 
     // Connect WebSocket
@@ -136,6 +187,29 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
   const handlePostRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id) return;
+
+    // Dev mode: create a mock request in local state immediately
+    if (isDevMode) {
+      const mockReq = {
+        id: `dev-req-${Date.now()}`,
+        title: newReq.title,
+        description: newReq.description,
+        category: newReq.category,
+        urgency: newReq.urgency,
+        durationHours: newReq.durationHours,
+        locationTag: user.hostelBlock || 'Block A',
+        status: 'OPEN',
+        createdAt: new Date().toISOString(),
+        requester: { id: user.id, fullName: user.fullName, trustScore: user.trustScore ?? 5.0 }
+      };
+      setRequests(prev => [mockReq, ...prev]);
+      setSelectedRequestOffers(prev => ({ ...prev, [mockReq.id]: [] }));
+      setShowModal(false);
+      addToast('SUCCESS', 'Your query has been posted campus-wide! (Dev Mode)');
+      setNewReq({ title: '', category: 'ELECTRONICS', urgency: 'HIGH', durationHours: 2, description: '' });
+      return;
+    }
+
     try {
       await RequestService.createRequest({ ...newReq, locationTag: user.hostelBlock || 'Block A' }, user.id);
       setShowModal(false);
@@ -160,6 +234,25 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
     e.preventDefault();
     if (!offeredRequestId || !user?.id) return;
     setSubmittingOffer(true);
+
+    // Dev mode: create a mock offer in local state immediately
+    if (isDevMode) {
+      const mockOffer = {
+        id: `dev-offer-${Date.now()}`,
+        message: offerMessage,
+        status: 'PENDING',
+        lender: { id: user.id, fullName: user.fullName, trustScore: user.trustScore ?? 5.0 }
+      };
+      setSelectedRequestOffers(prev => ({
+        ...prev,
+        [offeredRequestId]: [...(prev[offeredRequestId] || []), mockOffer]
+      }));
+      setShowOfferModal(false);
+      setSubmittingOffer(false);
+      addToast('SUCCESS', 'Offer submitted! The borrower has been notified. (Dev Mode)');
+      return;
+    }
+
     try {
       await RequestService.makeOffer(offeredRequestId, { message: offerMessage }, user.id);
       setShowOfferModal(false);
@@ -176,6 +269,28 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
   // Accept lending offer
   const handleAcceptOffer = async (requestId: string, offerId: string) => {
     if (!confirm('Are you sure you want to accept this offer? This will notify the lender.')) return;
+
+    // Dev mode: create a mock transaction and update request status locally
+    if (isDevMode) {
+      const req = requests.find(r => r.id === requestId);
+      const offer = selectedRequestOffers[requestId]?.find((o: any) => o.id === offerId);
+      if (req && offer) {
+        const mockTx = {
+          id: `dev-tx-${Date.now()}`,
+          status: 'PENDING_EXCHANGE',
+          startTime: new Date().toISOString(),
+          request: req,
+          borrower: { id: user.id, fullName: user.fullName, hostelBlock: user.hostelBlock || 'Block A', trustScore: user.trustScore ?? 5.0 },
+          lender: offer.lender
+        };
+        setMyTransactions(prev => [mockTx, ...prev]);
+        setRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: 'FULFILLED' } : r));
+        setActiveTab('transactions');
+        addToast('SUCCESS', 'Offer Accepted! Transaction generated. (Dev Mode)');
+      }
+      return;
+    }
+
     try {
       await RequestService.acceptOffer(requestId, offerId);
       loadData();
@@ -189,6 +304,13 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
 
   // Update Handoff status
   const handleUpdateStatus = async (txId: string, status: string) => {
+    // Dev mode: update transaction status in local state
+    if (isDevMode) {
+      setMyTransactions(prev => prev.map(tx => tx.id === txId ? { ...tx, status } : tx));
+      addToast('SUCCESS', `Status updated to ${status.replace('_', ' ')}! (Dev Mode)`);
+      return;
+    }
+
     try {
       await TransactionService.updateTransactionStatus(txId, status);
       loadData();
@@ -202,11 +324,29 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
   // Star Rating feedback loop submitter
   const handleSubmitRating = async (tx: any, counterpart: any) => {
     if (!counterpart?.id) return;
+    const currentScore = counterpart.trustScore ?? 5.0;
+    // Weighted average: weight the existing score by 4 and add new rating, divide by 5
+    const newScore = parseFloat(((currentScore * 4 + ratingScore) / 5).toFixed(1));
+
+    // Dev mode: update trust score in local transaction state
+    if (isDevMode) {
+      setMyTransactions(prev => prev.map(t => {
+        if (t.id !== tx.id) return t;
+        const isBorrower = t.borrower?.id === user?.id;
+        return {
+          ...t,
+          lender: !isBorrower ? t.lender : { ...t.lender, trustScore: newScore },
+          borrower: isBorrower ? t.borrower : { ...t.borrower, trustScore: newScore }
+        };
+      }));
+      setRatedTxIds(prev => ({ ...prev, [tx.id]: true }));
+      setRatingComment('');
+      setRatingScore(5);
+      addToast('SUCCESS', `⭐ Trust score for ${counterpart.fullName} updated to ${newScore}! (Dev Mode)`);
+      return;
+    }
+
     try {
-      const currentScore = counterpart.trustScore ?? 5.0;
-      // Weighted average: weight the existing score by 4 and add new rating, divide by 5
-      const newScore = parseFloat(((currentScore * 4 + ratingScore) / 5).toFixed(1));
-      
       await UserService.updateTrustScore(counterpart.id, newScore);
       
       setRatedTxIds(prev => ({ ...prev, [tx.id]: true }));

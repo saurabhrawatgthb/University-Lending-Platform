@@ -24,9 +24,7 @@ public class MatchingEngineService {
 
     @Async
     @Transactional(readOnly = true)
-    public void processNewRequest(UUID requestId) {
-        ItemRequest request = requestRepository.findByIdWithRequester(requestId)
-                .orElseThrow(() -> new IllegalArgumentException("Request not found"));
+    public void processNewRequest(ItemRequest request) {
 
         // 1. Proximity Match (Users in same block)
         List<User> localUsers = userRepository.findByHostelBlock(request.getLocationTag());

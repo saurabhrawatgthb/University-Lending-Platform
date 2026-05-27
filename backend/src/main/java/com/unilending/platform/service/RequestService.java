@@ -30,7 +30,7 @@ public class RequestService {
         request.setRequester(requester);
         ItemRequest savedRequest = requestRepository.save(request);
         
-        matchingEngineService.processNewRequest(savedRequest.getId());
+        matchingEngineService.processNewRequest(savedRequest);
         
         return savedRequest;
     }
