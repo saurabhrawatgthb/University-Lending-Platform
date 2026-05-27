@@ -2,6 +2,7 @@
 FROM gradle:8.10-jdk21-alpine AS build
 WORKDIR /home/gradle/src
 COPY --chown=gradle:gradle . .
+RUN chmod +x ./gradlew
 RUN ./gradlew build -x test --no-daemon
 
 # Run Stage: Deploy the compiled JAR using a lightweight JRE 21
