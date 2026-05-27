@@ -42,9 +42,9 @@ export class WebSocketService {
             onConnect: () => {
                 console.log('STOMP connected');
                 
-                // Subscribe to direct personal notifications
+                // Subscribe to direct personal notifications using the explicit user topic path
                 if (this.userId) {
-                    this.client.subscribe('/user/queue/notifications', (message: IMessage) => {
+                    this.client.subscribe(`/topic/user/${this.userId}/notifications`, (message: IMessage) => {
                         this.onDirectNotification(JSON.parse(message.body));
                     });
                 }

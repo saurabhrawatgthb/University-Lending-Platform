@@ -21,12 +21,14 @@ public class Notification {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User user;
 
     private String type; // NEW_REQUEST_NEARBY, OFFER_DECLINED, OFFER_ACCEPTED
     private String message;
     private String referenceId; // E.g., request Id or offer Id
 
+    @Builder.Default
     private boolean isRead = false;
 
     @CreationTimestamp

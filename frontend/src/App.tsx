@@ -1,5 +1,6 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { AuthPage } from './AuthPage';
+import { UserService } from './api/apiClient';
 
 const Dashboard = lazy(() =>
   import('./Dashboard').then((module) => ({ default: module.Dashboard }))
@@ -17,6 +18,17 @@ function App() {
     }
     return null;
   });
+
+  useEffect(() => {
+    if (user?.id && !user.id.toString().startsWith('dev-')) {
+      UserService.getUser(user.id).then(res => {
+        if (res.data) {
+          setUser(res.data);
+          localStorage.setItem('campuslend_user', JSON.stringify(res.data));
+        }
+      }).catch(err => console.error('Failed to auto-refresh user profile:', err));
+    }
+  }, []);
 
   const handleLogin = (loggedUser: any) => {
     setUser(loggedUser);

@@ -28,3 +28,7 @@ export const TransactionService = {
     getMyTransactions: (userId: string) => apiClient.get(`/transactions/user/${userId}`),
     updateTransactionStatus: (id: string, status: string) => apiClient.put(`/transactions/${id}/status`, { status }),
 };
+
+export const NotificationService = {
+    getNotifications: (userId: string) => apiClient.get(`/notifications/user/${userId}`),
+};

@@ -52,6 +52,9 @@ class LendingFlowIntegrationTest {
     @Autowired
     private TransactionRepository transactionRepository;
 
+    @Autowired
+    private com.unilending.platform.service.NotificationService notificationService;
+
     @Test
     void testEndToEndLendingFlow() {
         String emailAlex = "alex." + java.util.UUID.randomUUID().toString().substring(0, 8) + "@uni.edu";
@@ -152,5 +155,12 @@ class LendingFlowIntegrationTest {
         
         // Weighted average: (5.0 * 4 + 4.0) / 5 = 4.8
         assertEquals(0, new BigDecimal("4.8").compareTo(updatedBob.getTrustScore()));
+
+        // 11. Retrieve historical notifications for Bob
+        java.util.List<com.unilending.platform.domain.Notification> notifications = notificationService.getNotificationsForUser(savedBob.getId());
+        assertNotNull(notifications);
+        assertFalse(notifications.isEmpty());
+        // Verify that the notification message contains the correct details
+        assertTrue(notifications.get(0).getMessage().contains("Scientific Calculator") || notifications.get(0).getMessage().contains("Casio"));
     }
 }

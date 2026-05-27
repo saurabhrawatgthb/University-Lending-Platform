@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { RequestService, TransactionService, UserService } from './api/apiClient';
+import { RequestService, TransactionService, UserService, NotificationService } from './api/apiClient';
 import { WebSocketService } from './api/websocketClient';
 import { 
   Plus, Bell, Clock, MapPin, Search, 
@@ -59,16 +59,30 @@ export const Dashboard = ({ user, onLogout }: { user: any, onLogout?: () => void
 
   // Fetch all dashboard data
   const loadData = () => {
-    // 1. Load active requests feed
+    if (!user?.id) return;
+
+    // 1. Load active requests feed and auto-fetch offers for own requests
     RequestService.getFeed().then(res => {
-      setRequests(res.data?.content || res.data || []);
+      const feed = res.data?.content || res.data || [];
+      setRequests(feed);
+      
+      // Auto-fetch offers for the user's own requests
+      const myReqs = feed.filter((req: any) => req.requester?.id === user.id);
+      myReqs.forEach((req: any) => {
+        loadOffersForRequest(req.id);
+      });
     }).catch(err => console.error('Failed to load feed:', err));
 
     // 2. Load active transactions (borrows/lends)
-    if (user?.id) {
-      TransactionService.getMyTransactions(user.id).then(res => {
-        setMyTransactions(res.data || []);
-      }).catch(err => console.error('Failed to load transactions:', err));
+    TransactionService.getMyTransactions(user.id).then(res => {
+      setMyTransactions(res.data || []);
+    }).catch(err => console.error('Failed to load transactions:', err));
+
+    // 3. Load historical notifications from DB
+    if (!user.id.toString().startsWith('dev-')) {
+      NotificationService.getNotifications(user.id).then(res => {
+        setNotifications(res.data || []);
+      }).catch(err => console.error('Failed to load historical notifications:', err));
     }
   };
 
