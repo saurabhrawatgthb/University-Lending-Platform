@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Base URL for API (Relative in production for integrated Spring Boot server, absolute for Vite dev)
-const API_BASE_URL = import.meta.env.PROD ? '/api/v1' : 'http://localhost:8080/api/v1';
+// Base URL for API (Reads VITE_API_BASE_URL environment variable, falls back to relative or localhost)
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.PROD ? '/api/v1' : 'http://localhost:8080/api/v1');
 
 export const apiClient = axios.create({
     baseURL: API_BASE_URL,

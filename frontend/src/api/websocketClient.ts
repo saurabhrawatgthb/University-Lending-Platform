@@ -1,8 +1,8 @@
 import { Client, type IMessage } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
-// WebSocket URL (Relative in production for integrated Spring Boot server, absolute for Vite dev)
-const WS_URL = import.meta.env.PROD ? '/ws' : 'http://localhost:8080/ws';
+// WebSocket URL (Reads VITE_WS_URL environment variable, falls back to relative or localhost)
+const WS_URL = import.meta.env.VITE_WS_URL || (import.meta.env.PROD ? '/ws' : 'http://localhost:8080/ws');
 
 export class WebSocketService {
     private client: Client;
