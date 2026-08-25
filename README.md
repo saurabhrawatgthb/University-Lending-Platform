@@ -10,7 +10,7 @@ A real-time campus lending platform where students can request and lend items qu
 
 ## Tech Stack
 
-- Backend: Java 21, Spring Boot 3.4.0
+- Backend: Java 21, Spring Boot 3.4.0../
 - Database: PostgreSQL (H2 in-memory for local development)
 - Frontend: React + TypeScript + Vite
 - Styling: Tailwind CSS
@@ -64,7 +64,7 @@ npm run dev
 - [4_CORE_BACKEND_LOGIC.md](4_CORE_BACKEND_LOGIC.md): Core backend behavior and flow.
 - [5_STARTUP_EVOLUTION.md](5_STARTUP_EVOLUTION.md): Product evolution roadmap.
 
-## Contribution and Change Tracking
+## Contribution and Change Tracking.....
 
 - Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
